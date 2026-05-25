@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
 using GreenStock.Data;
 using GreenStock.Services;
@@ -20,13 +22,15 @@ public class SuppliesForm : Form
     private Label _lblExpiry = null!;
     private DateTimePicker _dtpExpiry = null!;
     private Button _btnAddManual = null!;
-    private Button _btnCalculate = null!;
+    private Button _btnClear = null!;
     private Button _btnImport = null!;
     private Button _btnSave = null!;
-    private Button _btnDelete = null!;
+    private Button _btnCancel = null!;
     private DataGridView _dgvSupplies = null!;
     private Label _lblTotal = null!;
+    private Label _lblTotalQty = null!;
     private Label _lblTitle = null!;
+    private Panel _separator = null!;
 
     private readonly string _connStr;
     private readonly Guid _userId;
@@ -37,227 +41,277 @@ public class SuppliesForm : Form
         _connStr = connStr;
         _userId = userId;
         InitializeComponent();
+        LoadProducts();
     }
 
     private void InitializeComponent()
     {
         Text = "Поставка";
         StartPosition = FormStartPosition.CenterScreen;
-        Size = new Size(950, 500);
+        Size = new Size(950, 580);
         BackColor = Color.White;
-        Font = new Font("Segoe UI", 9);
+        Font = new Font("Segoe UI", 10);
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         MinimizeBox = false;
-        AutoScroll = false;
 
-        const int leftW = 220;
-        const int rightW = 690;
-        const int leftX = 12;
-        const int rightX = 244;
-        const int topPadding = 12;
+        const int leftX = 20;
+        const int rightX = 350;
+        const int fieldWidth = 280;
+        const int rowHeight = 35;
+        int y = 20;
 
-        _lblProduct = new Label 
-        { 
-            Text = "Товар:", 
-            Location = new Point(leftX, topPadding), 
-            AutoSize = true,
-            Font = new Font("Segoe UI", 9)
+        // ===== ЛЕВАЯ ЧАСТЬ =====
+        // Товар
+
+        _lblProduct = new Label
+        {
+            Text = "Товар:",
+            Location = new Point(leftX, y),
+            Size = new Size(100, 25),
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = new Font("Segoe UI", 10)
         };
         _cmbProduct = new ComboBox
         {
-            Location = new Point(leftX, topPadding + 18),
-            Size = new Size(leftW, 22),
+            Location = new Point(leftX, y + 25),
+            Size = new Size(fieldWidth, 27),
             DropDownStyle = ComboBoxStyle.DropDownList,
-            Font = new Font("Segoe UI", 9)
+            Font = new Font("Segoe UI", 10)
         };
 
-        _lblQty = new Label 
-        { 
-            Text = "Количество:", 
-            Location = new Point(leftX, topPadding + 52), 
-            AutoSize = true,
-            Font = new Font("Segoe UI", 9)
+        y += 70;
+
+        // Количество
+        _lblQty = new Label
+        {
+            Text = "Количество:",
+            Location = new Point(leftX, y),
+            Size = new Size(100, 25),
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = new Font("Segoe UI", 10)
         };
         _nudQty = new NumericUpDown
         {
-            Location = new Point(leftX, topPadding + 70),
-            Size = new Size(100, 22),
+            Location = new Point(leftX, y + 25),
+            Size = new Size(120, 27),
             Minimum = 1,
             Maximum = 99999,
             Value = 1,
-            Font = new Font("Segoe UI", 9)
+            Font = new Font("Segoe UI", 10)
         };
 
-        _lblPrice = new Label 
-        { 
-            Text = "Цена закупки:", 
-            Location = new Point(leftX, topPadding + 100), 
-            AutoSize = true,
-            Font = new Font("Segoe UI", 9)
+        y += 60;
+
+        // Цена закупки
+        _lblPrice = new Label
+        {
+            Text = "Цена закупки:",
+            Location = new Point(leftX, y),
+            Size = new Size(100, 25),
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = new Font("Segoe UI", 10)
         };
         _nudPrice = new NumericUpDown
         {
-            Location = new Point(leftX, topPadding + 118),
-            Size = new Size(100, 22),
+            Location = new Point(leftX, y + 25),
+            Size = new Size(120, 27),
             Minimum = 0,
             Maximum = 999999,
             DecimalPlaces = 2,
             Value = 0,
-            Font = new Font("Segoe UI", 9)
+            Font = new Font("Segoe UI", 10)
         };
 
-        _lblExpiry = new Label 
-        { 
-            Text = "Срок годности:", 
-            Location = new Point(leftX, topPadding + 148), 
-            AutoSize = true,
-            Font = new Font("Segoe UI", 9)
+        y += 60;
+
+        // Срок годности
+        _lblExpiry = new Label
+        {
+            Text = "Срок годности:",
+            Location = new Point(leftX, y),
+            Size = new Size(110, 25),
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = new Font("Segoe UI", 10)
         };
         _dtpExpiry = new DateTimePicker
         {
-            Location = new Point(leftX, topPadding + 166),
-            Size = new Size(120, 22),
+            Location = new Point(leftX, y + 25),
+            Size = new Size(150, 27),
             Format = DateTimePickerFormat.Short,
             Value = DateTime.Now.AddMonths(12),
-            Font = new Font("Segoe UI", 9)
+            Font = new Font("Segoe UI", 10)
         };
 
+        y += 70;
+
+        // Кнопка "Добавить в поставку" (голубая)
         _btnAddManual = new Button
         {
             Text = "Добавить в поставку",
-            Location = new Point(leftX, topPadding + 200),
-            Size = new Size(leftW, 28),
-            BackColor = Color.FromArgb(70, 130, 180),
-            ForeColor = Color.White,
+            Location = new Point(leftX, y),
+            Size = new Size(180, 35),
+            BackColor = Color.FromArgb(40, 120, 200),
+            ForeColor = Color.Black,
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand,
-            Font = new Font("Segoe UI", 8, FontStyle.Bold)
+            Font = new Font("Segoe UI", 10, FontStyle.Bold)
         };
         _btnAddManual.FlatAppearance.BorderSize = 0;
         _btnAddManual.Click += BtnAddManual_Click;
 
-        _btnCalculate = new Button
+        // Кнопка "Очистить" (серая)
+        _btnClear = new Button
         {
             Text = "Очистить",
-            Location = new Point(leftX, topPadding + 236),
-            Size = new Size(leftW, 28),
+            Location = new Point(leftX + 190, y),
+            Size = new Size(100, 35),
             BackColor = Color.FromArgb(128, 128, 128),
-            ForeColor = Color.White,
+            ForeColor = Color.Black,
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand,
-            Font = new Font("Segoe UI", 8, FontStyle.Bold)
+            Font = new Font("Segoe UI", 10)
         };
-        _btnCalculate.FlatAppearance.BorderSize = 0;
-        _btnCalculate.Click += (s, e) => { _supplies.Clear(); RefreshGrid(); _nudQty.Value = 1; _nudPrice.Value = 0; };
+        _btnClear.FlatAppearance.BorderSize = 0;
+        _btnClear.Click += (s, e) => { _supplies.Clear(); RefreshGrid(); };
 
+        // ===== ПРАВАЯ ЧАСТЬ =====
         _lblTitle = new Label
         {
             Text = "Товары в поставке:",
-            Location = new Point(rightX, topPadding),
+            Location = new Point(rightX, 20),
             AutoSize = true,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold)
+            Font = new Font("Segoe UI", 12, FontStyle.Bold),
+            ForeColor = Color.FromArgb(28, 42, 74)
         };
 
+        // Таблица с кнопкой удаления
         _dgvSupplies = new DataGridView
         {
-            Location = new Point(rightX, topPadding + 22),
-            Size = new Size(rightW, 210),
-            ReadOnly = true,
+            Location = new Point(rightX, 50),
+            Size = new Size(560, 280),
+            ReadOnly = false,
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
             SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             BackgroundColor = Color.White,
             BorderStyle = BorderStyle.FixedSingle,
-            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None,
-            Font = new Font("Segoe UI", 8),
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            Font = new Font("Segoe UI", 10),
             RowHeadersVisible = false,
-            GridColor = Color.LightGray,
-            ScrollBars = ScrollBars.Vertical,
-            ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize
+            AllowUserToResizeRows = false
         };
-        _dgvSupplies.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(70, 130, 180);
+        _dgvSupplies.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(28, 42, 74);
         _dgvSupplies.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-        _dgvSupplies.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 8, FontStyle.Bold);
-        _dgvSupplies.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+        _dgvSupplies.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold);
         _dgvSupplies.EnableHeadersVisualStyles = false;
-        _dgvSupplies.CellBorderStyle = DataGridViewCellBorderStyle.Single;
-        _dgvSupplies.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
-        _dgvSupplies.AllowUserToResizeRows = false;
 
+        // Колонки
+        _dgvSupplies.Columns.Add("ProductId", "ID");
         _dgvSupplies.Columns.Add("Товар", "Товар");
         _dgvSupplies.Columns.Add("Количество", "Количество");
         _dgvSupplies.Columns.Add("Цена", "Цена");
-        _dgvSupplies.Columns.Add("СуммаПозиции", "Сумма позиции");
+        _dgvSupplies.Columns.Add("Сумма", "Сумма");
+        _dgvSupplies.Columns.Add("Удалить", "Удалить");
 
-        _dgvSupplies.Columns["Товар"].Width = 280;
-        _dgvSupplies.Columns["Количество"].Width = 80;
-        _dgvSupplies.Columns["Цена"].Width = 100;
-        _dgvSupplies.Columns["СуммаПозиции"].Width = 120;
+        _dgvSupplies.Columns["ProductId"]!.Visible = false;
+        _dgvSupplies.Columns["Товар"]!.Width = 170;
+        _dgvSupplies.Columns["Количество"]!.Width = 100;
+        _dgvSupplies.Columns["Цена"]!.Width = 100;
+        _dgvSupplies.Columns["Сумма"]!.Width = 90;
+        _dgvSupplies.Columns["Удалить"]!.Width = 75;
 
+        // Кнопка удаления в каждой строке
+        _dgvSupplies.CellContentClick += DgvSupplies_CellContentClick;
+
+        // Итого позиций
         _lblTotal = new Label
         {
-            Text = "Итого позиций: 0   Общее количество: 0",
-            Location = new Point(rightX, topPadding + 238),
-            Size = new Size(rightW, 24),
-            ForeColor = Color.Black,
-            Font = new Font("Segoe UI", 8),
-            BorderStyle = BorderStyle.FixedSingle,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Padding = new Padding(4, 0, 0, 0)
+            Text = "Итого позиций: 0",
+            Location = new Point(rightX, 345),
+            Size = new Size(200, 25),
+            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            ForeColor = Color.FromArgb(28, 42, 74)
         };
 
+        // Общее количество
+        _lblTotalQty = new Label
+        {
+            Text = "Общее количество: 0",
+            Location = new Point(rightX, 370),
+            Size = new Size(200, 25),
+            Font = new Font("Segoe UI", 10),
+            ForeColor = Color.FromArgb(64, 64, 64)
+        };
+
+        // Разделитель
+        _separator = new Panel
+        {
+            Location = new Point(12, 420),
+            Size = new Size(this.ClientSize.Width - 24, 2),
+            BackColor = Color.LightGray,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+        };
+
+        // Кнопка "Импортировать из файла" (слева, серая)
         _btnImport = new Button
         {
             Text = "Импортировать из файла",
-            Location = new Point(leftX, 430),
-            Size = new Size(leftW, 32),
+            Location = new Point(12, 440),
+            Size = new Size(180, 35),
             BackColor = Color.FromArgb(128, 128, 128),
-            ForeColor = Color.White,
+            ForeColor = Color.Black,
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand,
-            Font = new Font("Segoe UI", 9, FontStyle.Bold)
+            Font = new Font("Segoe UI", 10),
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Left
         };
         _btnImport.FlatAppearance.BorderSize = 0;
         _btnImport.Click += BtnImport_Click;
 
+        // Кнопка "Сохранить поставку" (голубая)
         _btnSave = new Button
         {
             Text = "Сохранить поставку",
-            Location = new Point(rightX, 430),
-            Size = new Size(300, 32),
-            BackColor = Color.FromArgb(70, 130, 180),
-            ForeColor = Color.White,
+            Location = new Point(this.ClientSize.Width - 320, 440),
+            Size = new Size(160, 35),
+            BackColor = Color.FromArgb(40, 120, 200),
+            ForeColor = Color.Black,
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand,
-            Font = new Font("Segoe UI", 9, FontStyle.Bold)
+            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Right
         };
         _btnSave.FlatAppearance.BorderSize = 0;
         _btnSave.Click += BtnSave_Click;
 
-        _btnDelete = new Button
+        // Кнопка "Отменить" (серая)
+        _btnCancel = new Button
         {
             Text = "Отменить",
-            Location = new Point(rightX + 310, 430),
-            Size = new Size(rightW - 310, 32),
-            BackColor = Color.FromArgb(192, 57, 43),
-            ForeColor = Color.White,
+            Location = new Point(this.ClientSize.Width - 140, 440),
+            Size = new Size(120, 35),
+            BackColor = Color.FromArgb(128, 128, 128),
+            ForeColor = Color.Black,
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand,
-            Font = new Font("Segoe UI", 9, FontStyle.Bold)
+            Font = new Font("Segoe UI", 10),
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Right
         };
-        _btnDelete.FlatAppearance.BorderSize = 0;
-        _btnDelete.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
-
+        _btnCancel.FlatAppearance.BorderSize = 0;
+        _btnCancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
+        // Добавляем всё на форму
         Controls.AddRange(new Control[]
         {
-            _lblProduct, _cmbProduct, _lblQty, _nudQty, _lblPrice, _nudPrice,
-            _lblExpiry, _dtpExpiry, _btnAddManual, _btnCalculate,
-            _lblTitle, _dgvSupplies, _lblTotal, 
-            _btnImport, _btnSave, _btnDelete
+            _lblProduct, _cmbProduct,
+            _lblQty, _nudQty,
+            _lblPrice, _nudPrice,
+            _lblExpiry, _dtpExpiry,
+            _btnAddManual, _btnClear,
+            _lblTitle, _dgvSupplies,
+            _lblTotal, _lblTotalQty, _separator,
+            _btnImport, _btnSave, _btnCancel
         });
-
-        Load += (s, e) => LoadProducts();
     }
 
     private void LoadProducts()
@@ -286,7 +340,7 @@ public class SuppliesForm : Form
 
         if (qty <= 0 || price <= 0)
         {
-            MessageBox.Show("Проверьте количество и цену.", Strings.Warning);
+            MessageBox.Show("Проверьте количество и цену.", Strings.Warning, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
@@ -298,13 +352,38 @@ public class SuppliesForm : Form
         _dtpExpiry.Value = DateTime.Now.AddMonths(12);
     }
 
-    private void BtnDelete_Click(object? sender, EventArgs e)
+    private void DgvSupplies_CellContentClick(object? sender, DataGridViewCellEventArgs e)
     {
-        if (_dgvSupplies.CurrentRow?.Index is int idx && idx >= 0 && idx < _supplies.Count)
+        if (e.RowIndex < 0) return;
+        if (_dgvSupplies.Columns[e.ColumnIndex].Name == "Удалить")
         {
-            _supplies.RemoveAt(idx);
-            RefreshGrid();
+            if (e.RowIndex < _supplies.Count)
+            {
+                _supplies.RemoveAt(e.RowIndex);
+                RefreshGrid();
+            }
         }
+    }
+
+    private void RefreshGrid()
+    {
+        _dgvSupplies.Rows.Clear();
+
+        int totalPositions = _supplies.Count;
+        int totalQuantity = 0;
+        decimal totalSum = 0;
+
+        foreach (var (_, name, qty, price, _) in _supplies)
+        {
+            decimal itemSum = qty * price;
+            totalQuantity += qty;
+            totalSum += itemSum;
+
+            _dgvSupplies.Rows.Add("", name, qty, $"{price:N2} ₽", $"{itemSum:N2} ₽", "❌");
+        }
+
+        _lblTotal.Text = $"Итого позиций: {totalPositions}";
+        _lblTotalQty.Text = $"Общее количество: {totalQuantity}";
     }
 
     private void BtnImport_Click(object? sender, EventArgs e)
@@ -320,7 +399,6 @@ public class SuppliesForm : Form
             foreach (var line in lines)
             {
                 if (string.IsNullOrWhiteSpace(line)) continue;
-               
                 if (line.StartsWith("productId") || line.StartsWith("article")) continue;
 
                 var parts = line.Split(';');
@@ -335,17 +413,13 @@ public class SuppliesForm : Form
                 }
                 else
                 {
-                    try
-                    {
-                        using var conn2 = new NpgsqlConnection(_connStr);
-                        conn2.Open();
-                        using var cmd = new NpgsqlCommand("SELECT id FROM products WHERE article = @article LIMIT 1", conn2);
-                        cmd.Parameters.AddWithValue("@article", productIdOrArticle);
-                        var o = cmd.ExecuteScalar();
-                        if (o != null && Guid.TryParse(o.ToString()!, out Guid foundId))
-                            productId = foundId;
-                    }
-                    catch { }
+                    using var conn2 = new NpgsqlConnection(_connStr);
+                    conn2.Open();
+                    using var cmd = new NpgsqlCommand("SELECT id FROM products WHERE article = @article LIMIT 1", conn2);
+                    cmd.Parameters.AddWithValue("@article", productIdOrArticle);
+                    var o = cmd.ExecuteScalar();
+                    if (o != null && Guid.TryParse(o.ToString()!, out Guid foundId))
+                        productId = foundId;
                 }
 
                 if (productId == Guid.Empty) continue;
@@ -355,27 +429,25 @@ public class SuppliesForm : Form
                 if (!DateTime.TryParse(parts[3].Trim(), System.Globalization.CultureInfo.InvariantCulture, out DateTime expiry)) continue;
 
                 string productName = $"Product {productId}";
-                try
+                using (var conn2 = new NpgsqlConnection(_connStr))
                 {
-                    using var conn2 = new NpgsqlConnection(_connStr);
                     conn2.Open();
                     using var cmd = new NpgsqlCommand("SELECT name FROM products WHERE id = @id", conn2);
                     cmd.Parameters.AddWithValue("@id", productId);
                     var o = cmd.ExecuteScalar();
                     if (o != null) productName = o.ToString()!;
                 }
-                catch {}
 
                 _supplies.Add((productId, productName, qty, price, expiry.Date));
                 imported++;
             }
 
             RefreshGrid();
-            MessageBox.Show($"Импортировано позиций: {imported}", Strings.Done);
+            MessageBox.Show($"Импортировано позиций: {imported}", Strings.Done, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Ошибка импорта: {ex.Message}", Strings.Error);
+            MessageBox.Show($"Ошибка импорта: {ex.Message}", Strings.Error, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
@@ -383,7 +455,7 @@ public class SuppliesForm : Form
     {
         if (_supplies.Count == 0)
         {
-            MessageBox.Show("Добавьте хотя бы одну позицию.", Strings.Warning);
+            MessageBox.Show("Добавьте хотя бы одну позицию.", Strings.Warning, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
@@ -395,7 +467,6 @@ public class SuppliesForm : Form
         {
             foreach (var (productId, _, qty, price, expiry) in _supplies)
             {
-                
                 var cmdUpdate = new NpgsqlCommand(
                     "UPDATE products SET stock = stock + @qty, purchase_price = @price, expiry_date = @exp WHERE id = @pid", conn, tx);
                 cmdUpdate.Parameters.AddWithValue("@qty", qty);
@@ -406,36 +477,14 @@ public class SuppliesForm : Form
             }
 
             tx.Commit();
-            MessageBox.Show("Поставка успешно сохранена!", Strings.Done);
+            MessageBox.Show("Поставка успешно сохранена!", Strings.Done, MessageBoxButtons.OK, MessageBoxIcon.Information);
             DialogResult = DialogResult.OK;
             Close();
         }
         catch (Exception ex)
         {
             tx.Rollback();
-            MessageBox.Show($"Ошибка: {ex.Message}", Strings.Error);
+            MessageBox.Show($"Ошибка: {ex.Message}", Strings.Error, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
-    }
-
-    private void RefreshGrid()
-    {
-        _dgvSupplies.Rows.Clear();
-
-        int totalQty = 0;
-        decimal totalPrice = 0;
-
-        foreach (var (_, name, qty, price, expiry) in _supplies)
-        {
-            string formattedPrice = CurrencyService.Instance.Format(price);
-            decimal itemSum = qty * price;
-            string formattedSum = CurrencyService.Instance.Format(itemSum);
-
-            _dgvSupplies.Rows.Add(name, qty, formattedPrice, formattedSum);
-            totalQty += qty;
-            totalPrice += itemSum;
-        }
-
-        string totalFormatted = CurrencyService.Instance.Format(totalPrice);
-        _lblTotal.Text = $"{Strings.Supplies_TotalLabel} {totalFormatted} | {Strings.Supplies_TotalQty} {totalQty} шт.";
     }
 }

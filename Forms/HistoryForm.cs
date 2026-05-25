@@ -38,7 +38,7 @@ public class HistoryForm : Form
         {
             Text = "Накладные",
             Font = new Font("Segoe UI", 12, FontStyle.Bold),
-            ForeColor = Color.FromArgb(28, 42, 74),
+            ForeColor = Color.Black,
             Location = new Point(20, 15),
             AutoSize = true
         };
@@ -65,17 +65,17 @@ public class HistoryForm : Form
             Font = new Font("Segoe UI", 10),
             RowHeadersVisible = false
         };
-        _dgvShipments.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(28, 42, 74);
-        _dgvShipments.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+        _dgvShipments.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(200, 200, 200);
+        _dgvShipments.ColumnHeadersDefaultCellStyle.ForeColor = Color.Black;
         _dgvShipments.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold);
         _dgvShipments.EnableHeadersVisualStyles = false;
         _dgvShipments.SelectionChanged += DgvShipments_SelectionChanged;
-
+        
         _lblItems = new Label
         {
             Text = "Состав накладной",
             Font = new Font("Segoe UI", 12, FontStyle.Bold),
-            ForeColor = Color.FromArgb(28, 42, 74),
+            ForeColor = Color.Black,
             Location = new Point(20, 350),
             AutoSize = true
         };
@@ -100,8 +100,8 @@ public class HistoryForm : Form
             Font = new Font("Segoe UI", 10),
             RowHeadersVisible = false
         };
-        _dgvItems.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(28, 42, 74);
-        _dgvItems.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+        _dgvItems.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(200, 200, 200);
+        _dgvItems.ColumnHeadersDefaultCellStyle.ForeColor = Color.Black;
         _dgvItems.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold);
         _dgvItems.EnableHeadersVisualStyles = false;
 
@@ -125,8 +125,8 @@ public class HistoryForm : Form
             _dgvShipments.DataSource = shipments.Select((s, idx) => new
             {
                 N = idx + 1,
-                Дата_Время = s.CreatedAt,
-                Кто_оформил = s.CreatedBy,
+                Дата = s.CreatedAt,
+                Кто = s.CreatedBy,
                 Получатель = s.Recipient,
                 Позиций = s.ItemCount,
                 Сумма = $"{s.TotalAmount:N2} ₽",
@@ -135,6 +135,16 @@ public class HistoryForm : Form
 
             if (_dgvShipments.Columns.Contains("Id"))
                 _dgvShipments.Columns["Id"]!.Visible = false;
+            if (_dgvShipments.Columns.Contains("Дата"))
+                _dgvShipments.Columns["Дата"]!.HeaderText = "Дата";
+            if (_dgvShipments.Columns.Contains("Кто"))
+                _dgvShipments.Columns["Кто"]!.HeaderText = "Кто оформил";
+            if (_dgvShipments.Columns.Contains("Получатель"))
+                _dgvShipments.Columns["Получатель"]!.HeaderText = "Получатель";
+            if (_dgvShipments.Columns.Contains("Позиций"))
+                _dgvShipments.Columns["Позиций"]!.HeaderText = "Позиций";
+            if (_dgvShipments.Columns.Contains("Сумма"))
+                _dgvShipments.Columns["Сумма"]!.HeaderText = "Сумма";
         }
         catch (Exception ex)
         {
@@ -163,13 +173,13 @@ public class HistoryForm : Form
                 Артикул = i.Article,
                 Товар = i.ProductName,
                 Количество = i.Quantity,
-                Ед_изм = i.Unit,
+                Ед = i.Unit,
                 Цена = $"{i.Price:N2} ₽",
                 Сумма = $"{i.Total:N2} ₽"
             }).ToList();
 
-            if (_dgvItems.Columns.Contains("Ед_изм"))
-                _dgvItems.Columns["Ед_изм"]!.HeaderText = "Ед. изм.";
+            if (_dgvItems.Columns.Contains("Ед"))
+                _dgvItems.Columns["Ед"]!.HeaderText = "Ед. изм.";
         }
         catch (Exception ex)
         {

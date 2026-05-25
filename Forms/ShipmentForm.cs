@@ -10,9 +10,6 @@ using NLog;
 
 namespace GreenStock.Forms;
 
-
-// aорма создания новой отгрузки товаров.
-
 public class ShipmentForm : Form
 {
     private static readonly ILogger _log = AppLogger.For<ShipmentForm>();
@@ -35,11 +32,9 @@ public class ShipmentForm : Form
     private readonly List<ShipmentRow> _rows = new();
     private List<Product> _products = new();
 
- 
     private Label _lblTitle = null!;
     private Panel _separator1 = null!;
     private Panel _separator2 = null!;
-    private Panel _separator3 = null!;
 
     private GroupBox _grpShipmentData = null!;
     private Label _lblCustomer = null!;
@@ -50,7 +45,6 @@ public class ShipmentForm : Form
     private ComboBox _cmbDeliveryRegion = null!;
     private Label _lblComment = null!;
     private TextBox _txtComment = null!;
-
     private DataGridView _dgvItems = null!;
 
     private GroupBox _grpWeather = null!;
@@ -60,7 +54,9 @@ public class ShipmentForm : Form
     private Label _lblTempMaxValue = null!;
     private Label _lblWeatherIcon = null!;
     private Label _lblWeatherCondition = null!;
+    private Panel _weatherWarningPanel = null!;
     private Label _lblWeatherWarning = null!;
+    private Label _lblRecommendationTitle = null!;
     private Label _lblRecommendation = null!;
     private Button _btnGetWeather = null!;
 
@@ -71,6 +67,9 @@ public class ShipmentForm : Form
     private Button _btnDeleteItem = null!;
     private Button _btnConfirm = null!;
     private Button _btnCancel = null!;
+
+    private ComboBox? _cmbProduct;
+    private NumericUpDown? _nudQuantity;
 
     public ShipmentForm(
         User currentUser,
@@ -86,6 +85,7 @@ public class ShipmentForm : Form
         InitializeComponent();
         LoadProductsAsync();
         LoadCustomers();
+        _ = UpdateWeatherAsync();
     }
 
     public ShipmentForm(User currentUser)
@@ -99,7 +99,7 @@ public class ShipmentForm : Form
     private void InitializeComponent()
     {
         this.Text = "Новая отгрузка";
-        this.Size = new Size(1100, 750);
+        this.Size = new Size(1100, 720);
         this.StartPosition = FormStartPosition.CenterParent;
         this.FormBorderStyle = FormBorderStyle.FixedSingle;
         this.MaximizeBox = false;
@@ -127,8 +127,8 @@ public class ShipmentForm : Form
             Text = "Данные отгрузки",
             Location = new Point(20, 70),
             Size = new Size(520, 450),
-            Font = new Font("Segoe UI", 10, FontStyle.Regular),
-            ForeColor = Color.FromArgb(64, 64, 64),
+            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            ForeColor = Color.FromArgb(28, 42, 74),
             BackColor = Color.White
         };
 
@@ -166,9 +166,10 @@ public class ShipmentForm : Form
             Location = new Point(fieldX, leftY + rowHeight),
             Size = new Size(fieldWidth, 27),
             Font = new Font("Segoe UI", 10, FontStyle.Regular),
-            Value = DateTime.Today,
+            Value = DateTime.Today.AddDays(2),
             Format = DateTimePickerFormat.Short
         };
+        _dtpShipmentDate.ValueChanged += async (s, e) => await UpdateWeatherAsync();
 
         _lblDeliveryRegion = new Label
         {
@@ -185,9 +186,9 @@ public class ShipmentForm : Form
             DropDownStyle = ComboBoxStyle.DropDownList,
             Font = new Font("Segoe UI", 10, FontStyle.Regular)
         };
-        var weatherService = ServiceLocator.GetService<IWeatherLogisticsService>();
-        _cmbDeliveryRegion.Items.AddRange(weatherService.GetSupportedRegions().ToArray());
+        _cmbDeliveryRegion.Items.AddRange(_weatherService.GetSupportedRegions().ToArray());
         if (_cmbDeliveryRegion.Items.Count > 0) _cmbDeliveryRegion.SelectedIndex = 0;
+        _cmbDeliveryRegion.SelectedIndexChanged += async (s, e) => await UpdateWeatherAsync();
 
         _lblComment = new Label
         {
@@ -200,7 +201,7 @@ public class ShipmentForm : Form
         _txtComment = new TextBox
         {
             Location = new Point(fieldX, leftY + rowHeight * 3),
-            Size = new Size(300, 27),
+            Size = new Size(fieldWidth, 27),
             Font = new Font("Segoe UI", 10, FontStyle.Regular),
             Multiline = true,
             Height = 60
@@ -221,8 +222,8 @@ public class ShipmentForm : Form
             Font = new Font("Segoe UI", 10, FontStyle.Bold),
             RowHeadersVisible = false
         };
-        _dgvItems.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(28, 42, 74);
-        _dgvItems.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+        _dgvItems.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(200, 200, 200);
+        _dgvItems.ColumnHeadersDefaultCellStyle.ForeColor = Color.Black;
         _dgvItems.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold);
         _dgvItems.EnableHeadersVisualStyles = false;
         _dgvItems.RowsDefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Regular);
@@ -236,17 +237,18 @@ public class ShipmentForm : Form
             _dgvItems
         });
 
+        // ===== ПОГОДА В РЕГИОНЕ =====
         _grpWeather = new GroupBox
         {
             Text = "Погода в регионе",
             Location = new Point(560, 70),
             Size = new Size(500, 450),
-            Font = new Font("Segoe UI", 10, FontStyle.Regular),
-            ForeColor = Color.FromArgb(64, 64, 64),
+            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            ForeColor = Color.FromArgb(28, 42, 74),
             BackColor = Color.White
         };
 
-        int weatherY = 35;
+        int weatherY = 30;
         int weatherX = 15;
 
         var lblRegionBold = new Label
@@ -262,7 +264,7 @@ public class ShipmentForm : Form
             Text = "—",
             Location = new Point(weatherX + 70, weatherY),
             Size = new Size(200, 25),
-            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            Font = new Font("Segoe UI", 10, FontStyle.Regular),
             ForeColor = Color.Black
         };
 
@@ -270,31 +272,31 @@ public class ShipmentForm : Form
         {
             Text = "Дата прогноза:",
             Location = new Point(weatherX, weatherY + 30),
-            Size = new Size(90, 20),
-            Font = new Font("Segoe UI", 8, FontStyle.Regular),
+            Size = new Size(95, 20),
+            Font = new Font("Segoe UI", 9, FontStyle.Regular),
             ForeColor = Color.Gray
         };
         _lblWeatherDateValue = new Label
         {
             Text = "—",
-            Location = new Point(weatherX + 100, weatherY + 30),
+            Location = new Point(weatherX + 105, weatherY + 30),
             Size = new Size(150, 20),
-            Font = new Font("Segoe UI", 8, FontStyle.Regular),
+            Font = new Font("Segoe UI", 9, FontStyle.Regular),
             ForeColor = Color.Gray
         };
 
         _btnGetWeather = new Button
         {
             Text = "Получить прогноз",
-            Location = new Point(weatherX + 280, weatherY),
+            Location = new Point(weatherX + 280, weatherY - 5),
             Size = new Size(150, 35),
             BackColor = Color.FromArgb(40, 120, 200),
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand,
-            Font = new Font("Segoe UI", 10, FontStyle.Regular)
+            Font = new Font("Segoe UI", 10, FontStyle.Bold)
         };
-        _btnGetWeather.Click += BtnGetWeather_Click;
+        _btnGetWeather.Click += async (s, e) => await UpdateWeatherAsync();
 
         var weatherSeparator1 = new Panel
         {
@@ -303,6 +305,7 @@ public class ShipmentForm : Form
             BackColor = Color.LightGray
         };
 
+        // Мин. температура (голубая)
         var lblTempMinTitle = new Label
         {
             Text = "Мин. температура:",
@@ -317,9 +320,10 @@ public class ShipmentForm : Form
             Location = new Point(weatherX + 140, weatherY + 75),
             Size = new Size(100, 25),
             Font = new Font("Segoe UI", 10, FontStyle.Bold),
-            ForeColor = Color.Black
+            ForeColor = Color.FromArgb(0, 100, 200)
         };
 
+        // Макс. температура (голубая)
         var lblTempMaxTitle = new Label
         {
             Text = "Макс. температура:",
@@ -334,21 +338,31 @@ public class ShipmentForm : Form
             Location = new Point(weatherX + 140, weatherY + 105),
             Size = new Size(100, 25),
             Font = new Font("Segoe UI", 10, FontStyle.Bold),
-            ForeColor = Color.Black
+            ForeColor = Color.FromArgb(0, 100, 200)
         };
 
         _lblWeatherIcon = new Label
         {
-            Text = "☁️",
+            Text = "🌤️",
             Location = new Point(weatherX, weatherY + 140),
             Size = new Size(40, 40),
-            Font = new Font("Segoe UI", 24, FontStyle.Regular),
+            Font = new Font("Segoe UI", 28, FontStyle.Regular),
             TextAlign = ContentAlignment.MiddleCenter
         };
+
+        var lblWeatherText = new Label
+        {
+            Text = "Погода",
+            Location = new Point(weatherX + 50, weatherY + 150),
+            Size = new Size(65, 25),
+            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            ForeColor = Color.Black
+        };
+
         _lblWeatherCondition = new Label
         {
             Text = "—",
-            Location = new Point(weatherX + 50, weatherY + 150),
+            Location = new Point(weatherX + 115, weatherY + 150),
             Size = new Size(150, 25),
             Font = new Font("Segoe UI", 10, FontStyle.Regular),
             ForeColor = Color.Gray
@@ -361,29 +375,39 @@ public class ShipmentForm : Form
             BackColor = Color.LightGray
         };
 
+        _weatherWarningPanel = new Panel
+        {
+            Location = new Point(weatherX, weatherY + 205),
+            Size = new Size(470, 45),
+            BackColor = Color.FromArgb(240, 240, 240),
+            BorderStyle = BorderStyle.FixedSingle
+        };
+
         _lblWeatherWarning = new Label
         {
             Text = "",
-            Location = new Point(weatherX, weatherY + 205),
-            Size = new Size(470, 30),
+            Location = new Point(10, 12),
+            Size = new Size(450, 25),
             Font = new Font("Segoe UI", 10, FontStyle.Bold),
-            ForeColor = Color.Orange,
-            TextAlign = ContentAlignment.MiddleLeft
+            ForeColor = Color.Black,
+            TextAlign = ContentAlignment.MiddleCenter
         };
+        _weatherWarningPanel.Controls.Add(_lblWeatherWarning);
 
-        var lblRecommendationTitle = new Label
+        _lblRecommendationTitle = new Label
         {
             Text = "Рекомендация:",
-            Location = new Point(weatherX, weatherY + 245),
-            Size = new Size(110, 25),
+            Location = new Point(weatherX, weatherY + 265),
+            Size = new Size(120, 25),
             Font = new Font("Segoe UI", 10, FontStyle.Bold),
             ForeColor = Color.Black
         };
+
         _lblRecommendation = new Label
         {
-            Text = "—",
-            Location = new Point(weatherX + 110, weatherY + 245),
-            Size = new Size(350, 25),
+            Text = "",
+            Location = new Point(weatherX + 115, weatherY + 265),
+            Size = new Size(340, 25),
             Font = new Font("Segoe UI", 10, FontStyle.Regular),
             ForeColor = Color.Gray
         };
@@ -396,10 +420,10 @@ public class ShipmentForm : Form
             weatherSeparator1,
             lblTempMinTitle, _lblTempMinValue,
             lblTempMaxTitle, _lblTempMaxValue,
-            _lblWeatherIcon, _lblWeatherCondition,
+            _lblWeatherIcon, lblWeatherText, _lblWeatherCondition,
             weatherSeparator2,
-            _lblWeatherWarning,
-            lblRecommendationTitle, _lblRecommendation
+            _weatherWarningPanel,
+            _lblRecommendationTitle, _lblRecommendation
         });
 
         _separator2 = new Panel
@@ -413,74 +437,56 @@ public class ShipmentForm : Form
         _lblTotalTitle = new Label
         {
             Text = "Итого по отгрузке:",
-            Font = new Font("Segoe UI", 11, FontStyle.Regular),
-            ForeColor = Color.FromArgb(64, 64, 64),
+            Font = new Font("Segoe UI", 12, FontStyle.Bold),
+            ForeColor = Color.FromArgb(28, 42, 74),
             Location = new Point(20, 560),
             AutoSize = true
         };
         _lblTotalAmount = new Label
         {
             Text = "0 ₽",
-            Font = new Font("Segoe UI", 14, FontStyle.Bold),
+            Font = new Font("Segoe UI", 16, FontStyle.Bold),
             ForeColor = Color.FromArgb(0, 150, 0),
             Location = new Point(200, 558),
             AutoSize = true
         };
 
-        _separator3 = new Panel
-        {
-            Location = new Point(20, 595),
-            Size = new Size(this.ClientSize.Width - 40, 2),
-            BackColor = Color.LightGray,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
-        };
-
+        // ===== КНОПКИ =====
+        // Добавить (серая)
         _btnAddProduct = new Button
         {
             Text = "Добавить",
-            Location = new Point(20, 615),
+            Location = new Point(20, 600),
             Size = new Size(100, 38),
-            BackColor = Color.FromArgb(40, 120, 200),
-            ForeColor = Color.White,
+            BackColor = Color.FromArgb(180, 180, 180),
+            ForeColor = Color.Black,
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand,
             Font = new Font("Segoe UI", 10, FontStyle.Bold)
         };
         _btnAddProduct.Click += BtnAddProduct_Click;
 
+        // Удалить (серая)
         _btnDeleteItem = new Button
         {
             Text = "Удалить",
-            Location = new Point(130, 615),
+            Location = new Point(130, 600),
             Size = new Size(100, 38),
-            BackColor = Color.FromArgb(200, 50, 50),
-            ForeColor = Color.White,
+            BackColor = Color.FromArgb(180, 180, 180),
+            ForeColor = Color.Black,
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand,
             Font = new Font("Segoe UI", 10, FontStyle.Bold)
         };
         _btnDeleteItem.Click += BtnDeleteItem_Click;
 
-        _btnCancel = new Button
-        {
-            Text = "Отмена",
-            Location = new Point(this.ClientSize.Width - 125, 615),
-            Size = new Size(100, 38),
-            BackColor = Color.LightGray,
-            ForeColor = Color.Black,
-            FlatStyle = FlatStyle.Flat,
-            Cursor = Cursors.Hand,
-            Font = new Font("Segoe UI", 10, FontStyle.Regular),
-            Anchor = AnchorStyles.Bottom | AnchorStyles.Right
-        };
-        _btnCancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
-
+        // Подтвердить (голубая)
         _btnConfirm = new Button
         {
             Text = "Подтвердить",
-            Location = new Point(this.ClientSize.Width - 265, 615),
+            Location = new Point(this.ClientSize.Width - 280, 600),
             Size = new Size(130, 38),
-            BackColor = Color.FromArgb(28, 42, 74),
+            BackColor = Color.FromArgb(40, 120, 200),
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand,
@@ -489,6 +495,21 @@ public class ShipmentForm : Form
         };
         _btnConfirm.Click += BtnConfirm_Click;
 
+        // Отмена (серая)
+        _btnCancel = new Button
+        {
+            Text = "Отмена",
+            Location = new Point(this.ClientSize.Width - 140, 600),
+            Size = new Size(110, 38),
+            BackColor = Color.FromArgb(180, 180, 180),
+            ForeColor = Color.Black,
+            FlatStyle = FlatStyle.Flat,
+            Cursor = Cursors.Hand,
+            Font = new Font("Segoe UI", 10, FontStyle.Regular),
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Right
+        };
+        _btnCancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
+
         this.Controls.Add(_lblTitle);
         this.Controls.Add(_separator1);
         this.Controls.Add(_grpShipmentData);
@@ -496,23 +517,86 @@ public class ShipmentForm : Form
         this.Controls.Add(_separator2);
         this.Controls.Add(_lblTotalTitle);
         this.Controls.Add(_lblTotalAmount);
-        this.Controls.Add(_separator3);
         this.Controls.Add(_btnAddProduct);
         this.Controls.Add(_btnDeleteItem);
-        this.Controls.Add(_btnCancel);
         this.Controls.Add(_btnConfirm);
+        this.Controls.Add(_btnCancel);
 
         this.Resize += (s, e) =>
         {
             int width = this.ClientSize.Width - 40;
             _separator1.Width = width;
             _separator2.Width = width;
-            _separator3.Width = width;
             _grpWeather.Width = width - 540;
-
-            _btnCancel.Location = new Point(this.ClientSize.Width - 220, 615);
-            _btnConfirm.Location = new Point(this.ClientSize.Width - 320, 615);
+            _btnConfirm.Location = new Point(this.ClientSize.Width - 280, 600);
+            _btnCancel.Location = new Point(this.ClientSize.Width - 140, 600);
         };
+    }
+
+    private async Task UpdateWeatherAsync()
+    {
+        var region = _cmbDeliveryRegion.SelectedItem?.ToString();
+        if (string.IsNullOrEmpty(region)) return;
+
+        var deliveryDate = _dtpShipmentDate.Value;
+        _btnGetWeather.Enabled = false;
+
+        try
+        {
+            var forecast = await _weatherService.GetForecastAsync(region, deliveryDate);
+
+            if (forecast == null)
+            {
+                _lblWeatherWarning.Text = "Данные о погоде недоступны";
+                _weatherWarningPanel.BackColor = Color.FromArgb(255, 220, 220);
+                _lblRecommendation.Text = "";
+                return;
+            }
+
+            _lblWeatherRegionValue.Text = region;
+            _lblWeatherDateValue.Text = deliveryDate.ToString("dd.MM.yyyy");
+            _lblTempMinValue.Text = $"{forecast.TemperatureC - 5}°C";
+            _lblTempMaxValue.Text = $"{forecast.TemperatureC + 5}°C";
+            _lblWeatherCondition.Text = forecast.Condition ?? "—";
+
+            if (forecast.TemperatureC < 0)
+                _lblWeatherIcon.Text = "❄️";
+            else if (forecast.TemperatureC > 25)
+                _lblWeatherIcon.Text = "☀️";
+            else
+                _lblWeatherIcon.Text = "🌤️";
+
+            if (forecast.TemperatureC <= -15)
+            {
+                _lblWeatherWarning.Text = "⚠ Требуется термоконтейнер!";
+                _weatherWarningPanel.BackColor = Color.FromArgb(255, 240, 150);
+                _lblRecommendation.Text = "оформить страховку груза";
+                _lblRecommendation.ForeColor = Color.FromArgb(200, 80, 0);
+            }
+            else if (forecast.TemperatureC >= 35)
+            {
+                _lblWeatherWarning.Text = "⚠ Рекомендуется страховка груза!";
+                _weatherWarningPanel.BackColor = Color.FromArgb(255, 200, 100);
+                _lblRecommendation.Text = "оформить страховку груза";
+                _lblRecommendation.ForeColor = Color.FromArgb(200, 80, 0);
+            }
+            else
+            {
+                _lblWeatherWarning.Text = "";
+                _weatherWarningPanel.BackColor = Color.FromArgb(240, 240, 240);
+                _lblRecommendation.Text = "";
+            }
+        }
+        catch (Exception)
+        {
+            _lblWeatherWarning.Text = "Данные о погоде недоступны";
+            _weatherWarningPanel.BackColor = Color.FromArgb(255, 220, 220);
+            _lblRecommendation.Text = "";
+        }
+        finally
+        {
+            _btnGetWeather.Enabled = true;
+        }
     }
 
     private async void LoadProductsAsync()
@@ -523,11 +607,6 @@ public class ShipmentForm : Form
             .Where(p => p.Stock > 0 && (p.ExpiryDate == null || p.ExpiryDate >= today))
             .OrderBy(p => p.Name)
             .ToList();
-
-        this.Invoke((MethodInvoker)delegate
-        {
-            
-        });
     }
 
     private void LoadCustomers()
@@ -544,8 +623,6 @@ public class ShipmentForm : Form
         if (_cmbProduct == null || _cmbProduct.SelectedIndex < 0) return null;
         return _products[_cmbProduct.SelectedIndex];
     }
-    private ComboBox? _cmbProduct;
-    private NumericUpDown? _nudQuantity;
 
     private void BtnAddProduct_Click(object? sender, EventArgs e)
     {
@@ -622,9 +699,18 @@ public class ShipmentForm : Form
             Цена = $"{r.Price:N2} ₽",
             Сумма = $"{r.Total:N2} ₽"
         }).ToList();
+        if (_dgvItems.Columns.Contains("Товар"))
+            _dgvItems.Columns["Товар"]!.HeaderText = "Товар";
+        if (_dgvItems.Columns.Contains("Кол_во"))
+            _dgvItems.Columns["Кол_во"]!.HeaderText = "Кол-во";
+        if (_dgvItems.Columns.Contains("Ед"))
+            _dgvItems.Columns["Ед"]!.HeaderText = "Ед. изм.";
+        if (_dgvItems.Columns.Contains("Цена"))
+            _dgvItems.Columns["Цена"]!.HeaderText = "Цена";
+        if (_dgvItems.Columns.Contains("Сумма"))
+            _dgvItems.Columns["Сумма"]!.HeaderText = "Сумма";
 
-        if (_dgvItems.Columns.Contains("Ед")) _dgvItems.Columns["Ед"]!.HeaderText = "Ед. изм.";
-        UpdateConfirmButton();
+        
     }
 
     private void UpdateTotal()
@@ -638,74 +724,7 @@ public class ShipmentForm : Form
         bool hasItems = _rows.Count > 0;
         bool hasRecipient = !string.IsNullOrWhiteSpace(_cmbCustomer.Text);
         _btnConfirm.Enabled = hasItems && hasRecipient;
-        _btnConfirm.BackColor = _btnConfirm.Enabled ? Color.FromArgb(28, 42, 74) : Color.Gray;
-    }
-
-    private async void BtnGetWeather_Click(object? sender, EventArgs e)
-    {
-        var region = _cmbDeliveryRegion.SelectedItem?.ToString();
-        if (string.IsNullOrEmpty(region))
-        {
-            MessageBox.Show("Выберите регион доставки", "Внимание", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-
-        var deliveryDate = _dtpShipmentDate.Value;
-        _btnGetWeather.Enabled = false;
-        _lblWeatherWarning.Text = "Загрузка прогноза...";
-        _lblWeatherWarning.ForeColor = Color.Gray;
-
-        try
-        {
-            var forecast = await _weatherService.GetForecastAsync(region, deliveryDate);
-            if (forecast != null)
-            {
-                _lblWeatherRegionValue.Text = region;
-                _lblWeatherDateValue.Text = deliveryDate.ToString("dd.MM.yyyy");
-                _lblTempMinValue.Text = $"{forecast.TemperatureC - 5}°C";
-                _lblTempMaxValue.Text = $"{forecast.TemperatureC + 5}°C";
-                _lblWeatherCondition.Text = forecast.Condition;
-
-                if (forecast.TemperatureC < 0)
-                    _lblWeatherIcon.Text = "❄️";
-                else if (forecast.TemperatureC > 25)
-                    _lblWeatherIcon.Text = "☀️";
-                else if (forecast.Humidity > 70)
-                    _lblWeatherIcon.Text = "☁️";
-                else
-                    _lblWeatherIcon.Text = "🌤️";
-
-                if (forecast.NeedsThermoContainer || forecast.NeedsInsurance)
-                {
-                    _lblWeatherWarning.Text = forecast.Warning;
-                    _lblWeatherWarning.ForeColor = Color.Red;
-
-                    string rec = "";
-                    if (forecast.NeedsThermoContainer)
-                        rec += "• Требуется термоконтейнер\n";
-                    if (forecast.NeedsInsurance)
-                        rec += "• Рекомендуется страховка груза";
-                    _lblRecommendation.Text = rec.TrimEnd('\n');
-                    _lblRecommendation.ForeColor = Color.Red;
-                }
-                else
-                {
-                    _lblWeatherWarning.Text = "✓ Погода благоприятная";
-                    _lblWeatherWarning.ForeColor = Color.Green;
-                    _lblRecommendation.Text = "Особых рекомендаций нет";
-                    _lblRecommendation.ForeColor = Color.Gray;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _lblWeatherWarning.Text = $"Ошибка: {ex.Message}";
-            _lblWeatherWarning.ForeColor = Color.Red;
-        }
-        finally
-        {
-            _btnGetWeather.Enabled = true;
-        }
+        _btnConfirm.BackColor = _btnConfirm.Enabled ? Color.FromArgb(40, 120, 200) : Color.FromArgb(180, 180, 180);
     }
 
     private async void BtnConfirm_Click(object? sender, EventArgs e)

@@ -66,7 +66,7 @@ public class ProductForm : Form
 
         Text            = isEdit ? Strings.Product_TitleEdit : Strings.Product_TitleAdd;
        
-        Size            = new Size(420, 6200);
+        Size            = new Size(420, 570);
         StartPosition   = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox     = false;
@@ -209,9 +209,9 @@ public class ProductForm : Form
         var lblRequired = new Label
         {
             Text      = Strings.Product_RequiredHint,
-            Font      = new Font("Segoe UI", 9),
+            Font      = new Font("Segoe UI", 8),
             ForeColor = Color.Gray,
-            Location  = new Point(labelX, startY + 9 * rowH + 4),
+            Location  = new Point(labelX, startY + 9 * rowH + 30),
             AutoSize  = true
         };
 
